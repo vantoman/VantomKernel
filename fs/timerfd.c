@@ -389,7 +389,6 @@ SYSCALL_DEFINE2(timerfd_create, int, clockid, int, flags)
 {
 	int ufd;
 	struct timerfd_ctx *ctx;
-	enum alarmtimer_type type;
 	char task_comm_buf[TASK_COMM_LEN];
 	char file_name_buf[32];
 	int instance;
@@ -423,6 +422,11 @@ SYSCALL_DEFINE2(timerfd_create, int, clockid, int, flags)
 		hrtimer_init(&ctx->t.tmr, clockid, HRTIMER_MODE_ABS);
 
 	ctx->moffs = ktime_mono_to_real(0);
+
+	instance = atomic_inc_return(&instance_count);
+	get_task_comm(task_comm_buf, current);
+	snprintf(file_name_buf, sizeof(file_name_buf), "[timerfd%d_%.*s]",
+		 instance, (int)sizeof(task_comm_buf), task_comm_buf);
 
 	instance = atomic_inc_return(&instance_count);
 	get_task_comm(task_comm_buf, current);
