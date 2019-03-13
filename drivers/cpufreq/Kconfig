@@ -73,7 +73,6 @@ config CPU_FREQ_DEFAULT_GOV_PERFORMANCE
 
 config CPU_FREQ_DEFAULT_GOV_POWERSAVE
 	bool "powersave"
-	select CPU_FREQ_GOV_POWERSAVE
 	help
 	  Use the CPUFreq governor 'powersave' as default. This sets
 	  the frequency statically to the lowest frequency supported by
@@ -81,7 +80,6 @@ config CPU_FREQ_DEFAULT_GOV_POWERSAVE
 
 config CPU_FREQ_DEFAULT_GOV_USERSPACE
 	bool "userspace"
-	select CPU_FREQ_GOV_USERSPACE
 	help
 	  Use the CPUFreq governor 'userspace' as default. This allows
 	  you to set the CPU frequency manually or when a userspace 
