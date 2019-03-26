@@ -185,6 +185,7 @@ int dwc3_gadget_resize_tx_fifos(struct dwc3 *dwc, struct dwc3_ep *dep)
 			dep->endpoint.ep_num == 0)
 		return 0;
 
+
 	/* Don't resize already resized IN endpoint */
 	if (dep->fifo_depth) {
 		dev_dbg(dwc->dev, "%s fifo_depth:%d is already set\n",
