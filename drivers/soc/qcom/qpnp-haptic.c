@@ -2285,9 +2285,7 @@ static void qpnp_timed_enable_worker(struct work_struct *work)
 
 	state = !!time_ms;
 
-	if (time_ms < 0)
-		return;
-
+	flush_work(&hap->work);
 	mutex_lock(&hap->lock);
 
 	if (hap->state == state) {
