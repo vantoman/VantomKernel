@@ -83,6 +83,9 @@ module_param_named(
 	tmr_add, tmr_add, uint, S_IRUGO | S_IWUSR | S_IWGRP
 );
 
+static bool cluster_use_deepest_state;
+module_param(cluster_use_deepest_state, bool, 0664);
+
 struct lpm_history {
 	uint32_t resi[MAXSAMPLES];
 	int mode[MAXSAMPLES];
@@ -158,24 +161,6 @@ static int lpm_cpu_callback(struct notifier_block *cpu_nb,
 	}
 	return NOTIFY_OK;
 }
-
-#ifdef CONFIG_ARM_PSCI
-
-static int __init set_cpuidle_ops(void)
-{
-	int ret = 0, cpu;
-
-	for_each_possible_cpu(cpu) {
-		ret = arm_cpuidle_init(cpu);
-		if (ret)
-			goto exit;
-	}
-
-exit:
-	return ret;
-}
-
-#endif
 
 static enum hrtimer_restart lpm_hrtimer_cb(struct hrtimer *h)
 {
@@ -490,19 +475,21 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	int best_level = 0;
 	uint32_t latency_us = pm_qos_request_for_cpu(PM_QOS_CPU_DMA_LATENCY,
 							dev->cpu);
-	s64 sleep_us = ktime_to_us(tick_nohz_get_sleep_length());
+	uint32_t sleep_us =
+		(uint32_t)(ktime_to_us(tick_nohz_get_sleep_length()));
 	uint32_t modified_time_us = 0;
 	uint32_t next_event_us = 0;
 	int i, idx_restrict;
 	uint32_t lvl_latency_us = 0;
 	uint64_t predicted = 0;
 	uint32_t htime = 0, idx_restrict_time = 0;
-	uint32_t next_wakeup_us = (uint32_t)sleep_us;
+	uint32_t next_wakeup_us = sleep_us;
 	uint32_t *min_residency = get_per_cpu_min_residency(dev->cpu);
 	uint32_t *max_residency = get_per_cpu_max_residency(dev->cpu);
 
-
-	if ((sleep_disabled && !cpu_isolated(dev->cpu)) || sleep_us  < 0)
+	if (!cpu)
+		return -EINVAL;
+	if (sleep_disabled)
 		return 0;
 
 	idx_restrict = cpu->nlevels + 1;
@@ -516,6 +503,7 @@ static int cpu_power_select(struct cpuidle_device *dev,
 		bool allow;
 
 		allow = lpm_cpu_mode_allow(dev->cpu, i, true);
+		allow &= !(dev->states_usage[i].disable);
 
 		if (!allow)
 			continue;
@@ -543,8 +531,8 @@ static int cpu_power_select(struct cpuidle_device *dev,
 			if (next_wakeup_us > max_residency[i]) {
 				predicted = lpm_cpuidle_predict(dev, cpu,
 					&idx_restrict, &idx_restrict_time);
-				if (predicted && (predicted < min_residency[i]))
-					predicted = min_residency[i];
+				if (predicted < min_residency[i])
+					predicted = 0;
 			} else
 				invalidate_predict_history(dev);
 		}
@@ -898,14 +886,10 @@ static int cluster_configure(struct lpm_cluster *cluster, int idx,
 		bool from_idle, int predicted)
 {
 	struct lpm_cluster_level *level = &cluster->levels[idx];
-	struct cpumask online_cpus;
 	int ret, i;
 
-	cpumask_and(&online_cpus, &cluster->num_children_in_sync,
-					cpu_online_mask);
-
 	if (!cpumask_equal(&cluster->num_children_in_sync, &cluster->child_cpus)
-			|| is_IPI_pending(&online_cpus)) {
+			|| is_IPI_pending(&cluster->num_children_in_sync)) {
 		return -EPERM;
 	}
 
@@ -1682,14 +1666,6 @@ static int __init lpm_levels_module_init(void)
 		pr_info("Error registering %s\n", lpm_driver.driver.name);
 		goto fail;
 	}
-
-#ifdef CONFIG_ARM_PSCI
-	rc = set_cpuidle_ops();
-	if (rc) {
-		pr_err("%s(): Failed to set cpuidle ops\n", __func__);
-		goto fail;
-	}
-#endif
 
 fail:
 	return rc;
