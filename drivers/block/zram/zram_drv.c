@@ -1160,7 +1160,8 @@ compress_again:
 		zcomp_stream_put(zram->comp);
 		atomic64_inc(&zram->stats.writestall);
 		ret = zpool_malloc(zram->mem_pool, comp_len,
-				GFP_NOIO | __GFP_HIGHMEM | __GFP_MOVABLE, &handle);
+				GFP_NOIO | __GFP_HIGHMEM | __GFP_MOVABLE,
+				&handle);
 		if (ret == 0)
 			goto compress_again;
 		return -ENOMEM;
